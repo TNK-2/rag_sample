@@ -59,10 +59,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sweep", action="store_true", help="パラメータを変えて比較する")
     parser.add_argument("--embedder", choices=["tfidf", "neural"], default="tfidf")
+    # 評価はパラメータを何度も変えて試すので、デフォルトは毎回作り直す memory にしている
+    # (qdrant でも検索結果は同じになる: tests/test_qdrant_store.py 参照)
+    parser.add_argument("--store", choices=["memory", "qdrant"], default="memory")
     args = parser.parse_args()
 
     if not args.sweep:
-        config = RAGConfig(embedder=args.embedder)
+        config = RAGConfig(embedder=args.embedder, store=args.store)
         hit, mrr = evaluate(config, verbose=True)
         print(f"\nHit Rate@{config.top_k} = {hit:.2f}   MRR = {mrr:.2f}")
         return
@@ -70,7 +73,8 @@ def main() -> None:
     print(f"{'chunk_size':>10} {'overlap':>8} {'top_k':>6} {'Hit@k':>7} {'MRR':>6}")
     for chunk_size, overlap in [(100, 20), (200, 40), (300, 50), (600, 100)]:
         for top_k in [1, 3, 5]:
-            config = RAGConfig(chunk_size=chunk_size, overlap=overlap, top_k=top_k, embedder=args.embedder)
+            config = RAGConfig(chunk_size=chunk_size, overlap=overlap, top_k=top_k,
+                               embedder=args.embedder, store=args.store)
             hit, mrr = evaluate(config)
             print(f"{chunk_size:>10} {overlap:>8} {top_k:>6} {hit:>7.2f} {mrr:>6.2f}")
 

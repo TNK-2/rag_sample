@@ -2,13 +2,14 @@
 
   uvicorn api:app --reload --port 8000
 
-  GET  /api/status    ... 文書一覧と使用モデル
+  GET  /api/status    ... 文書一覧・使用モデル・ベクトルストアの情報
   POST /api/retrieve  ... 検索だけ行い、検索結果と LLM に送るプロンプトを返す (API キー不要)
   POST /api/answer    ... 検索 + Claude による回答生成
 
 web/dist (npm run build の出力) があれば、それも同じサーバーから配信する。
 """
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from pydantic import BaseModel, Field
 from rag import RAGConfig, RAGPipeline
 from rag.generator import DEFAULT_MODEL, build_prompt, generate_answer
 from rag.loader import load_documents
+from rag.vector_store import INDEX_DIR
 
 app = FastAPI(title="rag_sample")
 
@@ -29,6 +31,8 @@ class QueryRequest(BaseModel):
     top_k: int = Field(default=3, ge=1, le=10)
     chunk_size: int = Field(default=300, ge=50, le=2000)
     overlap: int = Field(default=50, ge=0, le=500)
+    # 検索対象の文書を絞り込む (ベクトル DB のメタデータフィルタ)。None なら全文書
+    sources: list[str] | None = None
 
 
 class ChunkResult(BaseModel):
@@ -43,6 +47,7 @@ class RetrieveResponse(BaseModel):
     results: list[ChunkResult]
     prompt: str
     num_chunks: int
+    collection: str
 
 
 class AnswerResponse(BaseModel):
@@ -52,7 +57,7 @@ class AnswerResponse(BaseModel):
 
 @lru_cache(maxsize=16)
 def get_pipeline(chunk_size: int, overlap: int) -> RAGPipeline:
-    # チャンク分割の設定が変わるとインデックスを作り直す必要があるので、設定ごとにキャッシュする
+    # チャンク分割の設定ごとにコレクションが分かれる。初めての設定なら作成し、既にあれば読み込むだけ
     rag = RAGPipeline(RAGConfig(chunk_size=chunk_size, overlap=overlap))
     rag.build_index()
     return rag
@@ -62,13 +67,22 @@ def _retrieve(req: QueryRequest):
     if req.overlap >= req.chunk_size:
         raise HTTPException(422, "overlap は chunk_size より小さくしてください")
     rag = get_pipeline(req.chunk_size, req.overlap)
-    return rag, rag.retrieve(req.question, req.top_k)
+    return rag, rag.retrieve(req.question, req.top_k, req.sources)
 
 
 @app.get("/api/status")
 def status():
-    docs = load_documents(RAGConfig().data_dir)
-    return {"model": DEFAULT_MODEL, "documents": [{"source": d.source, "title": d.title} for d in docs]}
+    config = RAGConfig()
+    docs = load_documents(config.data_dir)
+    qdrant_url = os.environ.get("QDRANT_URL")
+    return {
+        "model": DEFAULT_MODEL,
+        "documents": [{"source": d.source, "title": d.title} for d in docs],
+        "store": {
+            "kind": config.store,
+            "location": qdrant_url or f"{INDEX_DIR.name}/qdrant (組み込みモード)",
+        },
+    }
 
 
 @app.post("/api/retrieve", response_model=RetrieveResponse)
@@ -80,7 +94,8 @@ def retrieve(req: QueryRequest):
             for r in results
         ],
         prompt=build_prompt(req.question, results),
-        num_chunks=len(rag.store.chunks),
+        num_chunks=rag.store.count(),
+        collection=rag.config.collection,
     )
 
 

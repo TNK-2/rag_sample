@@ -19,12 +19,16 @@ def main() -> None:
     parser.add_argument("--chunk-size", type=int, default=300)
     parser.add_argument("--overlap", type=int, default=50)
     parser.add_argument("--embedder", choices=["tfidf", "neural"], default="tfidf")
+    parser.add_argument("--store", choices=["qdrant", "memory"], default="qdrant",
+                        help="qdrant: ベクトル DB に保存 / memory: numpy で毎回作り直す")
     args = parser.parse_args()
 
-    config = RAGConfig(top_k=args.top_k, chunk_size=args.chunk_size, overlap=args.overlap, embedder=args.embedder)
+    config = RAGConfig(top_k=args.top_k, chunk_size=args.chunk_size, overlap=args.overlap,
+                       embedder=args.embedder, store=args.store)
     rag = RAGPipeline(config)
-    rag.build_index()
-    print(f"インデックス作成完了: {len(rag.store.chunks)} チャンク\n")
+    how = rag.build_index()
+    label = "既存のインデックスを読み込みました" if how == "loaded" else "インデックスを作成しました"
+    print(f"{label} ({args.store}): {rag.store.count()} チャンク\n")
 
     if args.question:
         answer_one(rag, args.question, args.retrieve_only)

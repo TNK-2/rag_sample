@@ -2,6 +2,8 @@ export type Settings = {
   top_k: number
   chunk_size: number
   overlap: number
+  // 検索対象の文書 (ベクトル DB のメタデータフィルタ)。null なら全文書
+  sources: string[] | null
 }
 
 export type ChunkResult = {
@@ -16,6 +18,7 @@ export type RetrieveResponse = {
   results: ChunkResult[]
   prompt: string
   num_chunks: number
+  collection: string
 }
 
 export type AnswerResponse = {
@@ -26,6 +29,7 @@ export type AnswerResponse = {
 export type Status = {
   model: string
   documents: { source: string; title: string }[]
+  store: { kind: string; location: string }
 }
 
 async function request<T>(path: string, body?: unknown): Promise<T> {

@@ -18,10 +18,12 @@
 実務では両方を組み合わせる「ハイブリッド検索」もよく使われます (docs/02_design_decisions.md 参照)。
 """
 
+import json
 import math
 import re
 import unicodedata
 from collections import Counter
+from pathlib import Path
 from typing import Protocol
 
 import numpy as np
@@ -31,6 +33,8 @@ class Embedder(Protocol):
     def fit(self, texts: list[str]) -> None: ...
     def embed_documents(self, texts: list[str]) -> np.ndarray: ...
     def embed_query(self, text: str) -> np.ndarray: ...
+    def save(self, path: Path) -> None: ...
+    def load(self, path: Path) -> bool: ...
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +97,22 @@ class TfidfEmbedder:
     def embed_query(self, text: str) -> np.ndarray:
         return self._vectorize(text)
 
+    # TF-IDF は「どの語が何番目の次元か (vocab)」と「IDF」をコーパスから学習している。
+    # インデックスを DB に永続化しても、この 2 つが無いと質問を同じベクトル空間に変換できないので一緒に保存する。
+    # (事前学習済みのニューラル埋め込みモデルなら、モデル名さえ同じならこの心配はない)
+    def save(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tokens = sorted(self.vocab, key=self.vocab.__getitem__)
+        path.write_text(json.dumps({"tokens": tokens, "idf": self.idf.tolist()}, ensure_ascii=False), encoding="utf-8")
+
+    def load(self, path: Path) -> bool:
+        if not path.exists():
+            return False
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self.vocab = {tok: i for i, tok in enumerate(data["tokens"])}
+        self.idf = np.array(data["idf"])
+        return True
+
 
 # ---------------------------------------------------------------------------
 # Neural embedding (optional)
@@ -119,6 +139,12 @@ class SentenceTransformerEmbedder:
 
     def embed_query(self, text: str) -> np.ndarray:
         return self.model.encode(f"query: {text}", normalize_embeddings=True)
+
+    def save(self, path: Path) -> None:
+        pass  # モデルの重みは Hugging Face のキャッシュにあるので保存不要
+
+    def load(self, path: Path) -> bool:
+        return True
 
 
 def create_embedder(name: str) -> Embedder:

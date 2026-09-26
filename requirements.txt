@@ -1,6 +1,8 @@
 numpy>=1.26
 anthropic>=1.8
 pytest>=8
+# ベクトル DB (組み込みモードならサーバー不要)
+qdrant-client>=1.12
 # Web UI 用の API サーバー
 fastapi>=0.115
 uvicorn>=0.30

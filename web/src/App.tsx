@@ -23,7 +23,7 @@ type Run = {
 export default function App() {
   const [status, setStatus] = useState<Status | null>(null)
   const [question, setQuestion] = useState(EXAMPLES[0])
-  const [settings, setSettings] = useState<Settings>({ top_k: 3, chunk_size: 300, overlap: 50 })
+  const [settings, setSettings] = useState<Settings>({ top_k: 3, chunk_size: 300, overlap: 50, sources: null })
   const [generate, setGenerate] = useState(true)
   const [run, setRun] = useState<Run | null>(null)
   const [activeCitation, setActiveCitation] = useState<number | null>(null)
@@ -58,11 +58,21 @@ export default function App() {
   }
 
   const maxOverlap = (chunkSize: number) => Math.min(200, chunkSize - 50)
-  const setNum = (key: keyof Settings) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const setNum = (key: 'top_k' | 'chunk_size' | 'overlap') => (e: React.ChangeEvent<HTMLInputElement>) =>
     setSettings((s) => {
       const next = { ...s, [key]: Number(e.target.value) }
       // overlap は chunk_size より小さくないといけないので、chunk_size を縮めたら追従させる
       return { ...next, overlap: Math.min(next.overlap, maxOverlap(next.chunk_size)) }
+    })
+
+  const allSources = status?.documents.map((d) => d.source) ?? []
+  const isSelected = (source: string) => settings.sources === null || settings.sources.includes(source)
+  const toggleSource = (source: string) =>
+    setSettings((s) => {
+      const current = s.sources ?? allSources
+      const next = current.includes(source) ? current.filter((x) => x !== source) : [...current, source]
+      // 全部選ばれていれば絞り込みなし (null) として送る
+      return { ...s, sources: next.length === allSources.length ? null : next }
     })
 
   return (
@@ -91,19 +101,38 @@ export default function App() {
         <section>
           <h2>検索対象の文書</h2>
           {status ? (
-            <ul className="docs">
-              {status.documents.map((d) => (
-                <li key={d.source}>
-                  <span>{d.title}</span>
-                  <code>{d.source}</code>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="docs">
+                {status.documents.map((d) => (
+                  <li key={d.source}>
+                    <label>
+                      <input type="checkbox" checked={isSelected(d.source)} onChange={() => toggleSource(d.source)} />
+                      <span>
+                        {d.title}
+                        <code>{d.source}</code>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <p className="note">チェックを外すと、ベクトル DB のメタデータフィルタでその文書を検索対象から外します。</p>
+            </>
           ) : (
             <p className="note">API サーバーに接続できません。<code>uvicorn api:app --port 8000</code> を起動してください。</p>
           )}
-          {status && <p className="note">モデル: <code>{status.model}</code></p>}
         </section>
+
+        {status && (
+          <section>
+            <h2>接続先</h2>
+            <dl className="info">
+              <dt>ベクトル DB</dt>
+              <dd>{status.store.kind === 'qdrant' ? 'Qdrant' : status.store.kind}<code>{status.store.location}</code></dd>
+              <dt>LLM</dt>
+              <dd><code>{status.model}</code></dd>
+            </dl>
+          </section>
+        )}
       </aside>
 
       <main>
@@ -163,10 +192,14 @@ function Result({ run, generate, activeCitation, onCite }: {
   return (
     <div className="steps">
       <Step n={1} title="検索 (Retrieval)"
-        meta={retrieval && `全 ${retrieval.num_chunks} チャンクから上位 ${run.settings.top_k} 件`}>
+        meta={retrieval && `コレクション ${retrieval.collection} (${retrieval.num_chunks} チャンク) から上位 ${run.settings.top_k} 件${run.settings.sources ? ` ・ ${run.settings.sources.length} 文書に絞り込み` : ''}`}>
         {loading === 'retrieve' && <Loading text="検索中…" />}
         {retrieval && retrieval.results.length === 0 && (
-          <p className="empty">関連するチャンクが見つかりませんでした (スコアが足切り値以下)。</p>
+          <p className="empty">
+            {run.settings.sources?.length === 0
+              ? '検索対象の文書が 1 つも選ばれていません。'
+              : '関連するチャンクが見つかりませんでした (スコアが足切り値以下)。'}
+          </p>
         )}
         {retrieval && retrieval.results.length > 0 && (
           <>

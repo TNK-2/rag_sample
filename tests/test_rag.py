@@ -42,7 +42,7 @@ def test_tfidf_vectors_are_normalized_and_similar_texts_score_higher():
 
 
 def test_pipeline_retrieves_relevant_chunk():
-    rag = RAGPipeline(RAGConfig())
+    rag = RAGPipeline(RAGConfig(store="memory"))
     rag.build_index()
     results = rag.retrieve("リモートワークは週に何日まで？")
     assert results[0].chunk.source == "01_work_rules.md"
@@ -50,7 +50,7 @@ def test_pipeline_retrieves_relevant_chunk():
 
 
 def test_build_prompt_numbers_documents():
-    rag = RAGPipeline(RAGConfig())
+    rag = RAGPipeline(RAGConfig(store="memory"))
     rag.build_index()
     prompt = build_prompt("経費の締め日は？", rag.retrieve("経費の締め日は？"))
     assert '<document index="1"' in prompt

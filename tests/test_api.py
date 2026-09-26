@@ -20,3 +20,16 @@ def test_retrieve_returns_results_and_prompt():
 def test_retrieve_rejects_overlap_not_smaller_than_chunk_size():
     res = client.post("/api/retrieve", json={"question": "x", "chunk_size": 100, "overlap": 100})
     assert res.status_code == 422
+
+
+def test_retrieve_filters_by_source():
+    body = {"question": "申請の期限は？", "top_k": 5, "sources": ["01_work_rules.md"]}
+    data = client.post("/api/retrieve", json=body).json()
+    assert data["results"]
+    assert {r["source"] for r in data["results"]} == {"01_work_rules.md"}
+    assert data["collection"] == "rag_tfidf_c300_o50"
+
+
+def test_retrieve_with_no_sources_selected_returns_nothing():
+    data = client.post("/api/retrieve", json={"question": "申請の期限は？", "sources": []}).json()
+    assert data["results"] == []
