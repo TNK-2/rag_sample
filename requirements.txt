@@ -1,5 +1,8 @@
 numpy>=1.26
 anthropic>=1.8
 pytest>=8
+# Web UI 用の API サーバー
+fastapi>=0.115
+uvicorn>=0.30
 # オプション: ニューラル埋め込み (--embedder neural) を試す場合
 # sentence-transformers>=3

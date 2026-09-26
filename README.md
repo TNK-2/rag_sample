@@ -31,6 +31,31 @@ python main.py            # 対話モード
 python -m pytest
 ```
 
+## Web UI (React)
+
+検索結果・スコア・ハイライト・プロンプト・回答を 1 画面で見られる UI です。
+チャンクサイズや top_k をスライダーで変えながら、検索結果がどう変わるかを観察できます。
+
+```bash
+# ターミナル 1: API サーバー (FastAPI)
+export ANTHROPIC_API_KEY=sk-ant-...   # 検索だけ試すなら不要 (UI で「回答を生成」をオフに)
+uvicorn api:app --reload --port 8000
+
+# ターミナル 2: フロントエンド開発サーバー (Vite)
+cd web
+npm install
+npm run dev     # → http://localhost:5173
+```
+
+`cd web && npm run build` でビルドしておけば、`uvicorn api:app --port 8000` だけで
+http://localhost:8000 から UI も配信されます。
+
+| 画面の要素 | 対応するステップ |
+|---|---|
+| ① 検索: スコアバーとハイライト (質問と共通する文字 2-gram) | `vector_store.search` / TF-IDF |
+| ② プロンプト: Claude に送られる内容そのもの | `generator.build_prompt` |
+| ③ 回答: 出典番号 [1] にマウスを乗せると根拠のチャンクが強調される | `generator.generate_answer` |
+
 モデルは `RAG_MODEL` 環境変数で変えられます (デフォルト `claude-opus-5`)。
 
 ## 全体像
@@ -54,6 +79,7 @@ python -m pytest
 | `rag/generator.py` | 5. 生成 | 根拠付き回答のプロンプト設計 |
 | `rag/pipeline.py` | 全体 | 各ステップのつなぎ方 |
 | `evaluate.py` | 評価 | Hit Rate / MRR で検索精度を測る |
+| `api.py` / `web/` | UI | FastAPI で RAG を API 化し、React から呼ぶ |
 
 ## ドキュメント
 

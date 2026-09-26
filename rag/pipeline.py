@@ -42,9 +42,9 @@ class RAGPipeline:
         self.embedder.fit(texts)
         self.store.add(chunks, self.embedder.embed_documents(texts))
 
-    def retrieve(self, question: str) -> list[SearchResult]:
+    def retrieve(self, question: str, top_k: int | None = None) -> list[SearchResult]:
         query_vec = self.embedder.embed_query(question)
-        return self.store.search(query_vec, self.config.top_k, self.config.min_score)
+        return self.store.search(query_vec, top_k or self.config.top_k, self.config.min_score)
 
     def ask(self, question: str) -> tuple[str, list[SearchResult]]:
         results = self.retrieve(question)
