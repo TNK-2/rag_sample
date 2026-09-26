@@ -1,0 +1,5 @@
+numpy>=1.26
+anthropic>=1.8
+pytest>=8
+# オプション: ニューラル埋め込み (--embedder neural) を試す場合
+# sentence-transformers>=3
