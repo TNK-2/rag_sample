@@ -38,6 +38,11 @@ def generate_answer(question: str, results: list[SearchResult], model: str = DEF
     import anthropic  # LLM を呼ぶときだけ必要
 
     client = anthropic.Anthropic()  # 認証情報は環境変数 ANTHROPIC_API_KEY などから自動で読まれる
+    extra_headers = {}
+    workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    if workspace_id:
+        # ワークスペースに紐付いていない API キーを使う場合に必要
+        extra_headers["anthropic-workspace-id"] = workspace_id
     response = client.beta.messages.create(
         model=model,
         max_tokens=16000,
@@ -46,6 +51,7 @@ def generate_answer(question: str, results: list[SearchResult], model: str = DEF
         # 安全性分類器がリクエストを断った場合に、サーバー側で別モデルに自動で切り替える設定
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
+        extra_headers=extra_headers,
     )
     if response.stop_reason == "refusal":
         return "(モデルがこのリクエストへの回答を控えました)"
